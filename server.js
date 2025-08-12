@@ -1,13 +1,32 @@
 const express = require('express');
 const cors = require('cors');
-const fetch = require('node-fetch');
+const puppeteer = require('puppeteer-core');
 
 const app = express();
-// Render provides a port via an environment variable. We use a fallback for local testing.
 const PORT = process.env.PORT || 3000;
 
-// Enable CORS for all requests to avoid any issues with your frontend.
+// Enable CORS for all requests
 app.use(cors());
+
+// The browser instance is launched once at startup to save resources
+let browser;
+
+const initializeBrowser = async () => {
+    try {
+        browser = await puppeteer.launch({
+            // Use an environment variable for the executable path,
+            // which Render provides for a pre-installed Chromium
+            executablePath: process.env.CHROMIUM_PATH || '/usr/bin/chromium-browser',
+            args: ['--no-sandbox', '--disable-setuid-sandbox']
+        });
+        console.log('Puppeteer browser launched successfully.');
+    } catch (error) {
+        console.error('Failed to launch browser:', error);
+        process.exit(1);
+    }
+};
+
+initializeBrowser();
 
 // The main endpoint to handle image downloads
 app.get('/download-image', async (req, res) => {
@@ -17,36 +36,59 @@ app.get('/download-image', async (req, res) => {
         return res.status(400).send('Image URL is required.');
     }
 
-    try {
-        // Create headers to mimic a browser request
-        const headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-            'Referer': 'https://www.google.com/' // A common referrer to bypass simple checks
-        };
+    if (!browser) {
+        return res.status(503).send('Browser is not yet initialized. Please try again in a moment.');
+    }
 
-        // Fetch the image from the external URL with the new headers
-        const response = await fetch(imageUrl, { headers });
-        if (!response.ok) {
-            throw new Error(`Failed to fetch image: ${response.statusText}`);
+    let page;
+    try {
+        page = await browser.newPage();
+        
+        // Block unnecessary requests to speed up page load
+        await page.setRequestInterception(true);
+        page.on('request', (request) => {
+            if (request.resourceType() === 'document' || request.resourceType() === 'image') {
+                request.continue();
+            } else {
+                request.abort();
+            }
+        });
+
+        const response = await page.goto(imageUrl, { waitUntil: 'domcontentloaded' });
+        
+        if (!response || !response.ok()) {
+            throw new Error(`Failed to navigate to image URL: ${response ? response.status() : 'No response'}`);
         }
 
+        // Get the image buffer
+        const imageBuffer = await response.buffer();
+        
         // Extract the content type from the response headers
-        const contentType = response.headers.get('content-type');
+        const contentType = response.headers()['content-type'];
         
         // Set the appropriate headers to force a download
         res.setHeader('Content-Type', contentType);
         res.setHeader('Content-Disposition', `attachment; filename="${imageUrl.split('/').pop()}"`);
         
-        // Pipe the image data directly to the response
-        response.body.pipe(res);
+        // Send the image buffer as the response
+        res.send(imageBuffer);
 
     } catch (error) {
-        console.error('Error downloading image:', error);
+        console.error('Error downloading image with Puppeteer:', error);
         res.status(500).send('An error occurred while trying to download the image.');
+    } finally {
+        if (page) {
+            await page.close();
+        }
     }
+});
+
+// Endpoint to check if the server is running
+app.get('/', (req, res) => {
+    res.send('Image proxy server is running.');
 });
 
 // Start the server
 app.listen(PORT, () => {
-    console.log(`Proxy server running on port ${PORT}`);
+    console.log(`Puppeteer-based proxy server running on port ${PORT}`);
 });
