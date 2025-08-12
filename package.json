@@ -1,7 +1,7 @@
 {
   "name": "image-proxy-server",
   "version": "1.0.0",
-  "description": "A simple proxy server to handle image downloads and bypass CORS.",
+  "description": "A proxy server using Puppeteer to handle image downloads.",
   "main": "server.js",
   "scripts": {
     "start": "node server.js",
@@ -12,13 +12,14 @@
     "cors",
     "render",
     "node",
-    "express"
+    "express",
+    "puppeteer"
   ],
   "author": "",
   "license": "ISC",
   "dependencies": {
     "cors": "^2.8.5",
     "express": "^4.18.2",
-    "node-fetch": "^2.6.7"
+    "puppeteer-core": "^22.9.0"
   }
 }
