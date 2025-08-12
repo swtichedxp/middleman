@@ -20,7 +20,8 @@ app.get('/download-image', async (req, res) => {
     try {
         // Create headers to mimic a browser request
         const headers = {
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36'
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
+            'Referer': 'https://www.google.com/' // A common referrer to bypass simple checks
         };
 
         // Fetch the image from the external URL with the new headers
